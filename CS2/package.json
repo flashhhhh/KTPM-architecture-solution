@@ -10,8 +10,12 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "archiver": "^7.0.1",
+    "express": "^4.21.1",
+    "multer": "^1.4.5-lts.1",
     "node-tesseract-ocr": "^2.2.1",
     "open-google-translator": "^1.0.5",
-    "pdfkit": "^0.15.0"
+    "pdfkit": "^0.15.0",
+    "unzipper": "^0.12.3"
   }
 }
