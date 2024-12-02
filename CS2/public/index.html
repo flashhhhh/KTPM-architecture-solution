@@ -9,14 +9,14 @@
 <body>
     <h1>Upload Image and Download Translated PDF</h1>
     <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
-        <label for="zipfile">Choose a zip file:</label>
-        <input type="file" name="zipfile" id="zipfile" accept=".zip" required>
+        <label for="file">Choose a file (Image or Zip):</label>
+        <input type="file" name="file" id="file" accept=".zip, .jpg, .jpeg, .png" required>
         <button type="submit">Upload and Process</button>
     </form>
 
     <div id="result" style="display:none;">
-        <p>Download your PDF:</p>
-        <a id="downloadLink" href="#" download="processed_files.zip">Download Processed Files</a>
+        <p>Download</p>
+        <a id="downloadLink" href="#" download>Download Processed File</a>
     </div>
     <script>
         document.getElementById("uploadForm").onsubmit = async function (event) {
@@ -25,16 +25,13 @@
             const formData = new FormData(this);
 
             try {
-                // Gửi yêu cầu upload tới server
                 const response = await fetch("/upload", {
                     method: "POST",
                     body: formData,
                 });
 
-                // Chờ server trả về đường dẫn download PDF
                 const data = await response.json();
 
-                // Cập nhật giao diện để hiển thị link download
                 document.getElementById("downloadLink").href = data.downloadLink;
                 document.getElementById("result").style.display = "block";
             } catch (err) {
