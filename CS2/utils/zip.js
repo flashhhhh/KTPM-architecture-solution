@@ -12,9 +12,16 @@ async function createZipFile(outputPath, files) {
 
         archive.pipe(output);
 
-        files.forEach((file) => {
-            archive.file(file, { name: path.basename(file) });
-        });
+        if (files.length === 1) {
+            archive.file(files[0], { name: path.basename(files[0]) });
+        } else {
+            files.forEach((file) => {
+                archive.file(file, { name: path.basename(file) });
+            });
+        }
+        // files.forEach((file) => {
+        //     archive.file(file, { name: path.basename(file) });
+        // });
 
         archive.finalize();
     });

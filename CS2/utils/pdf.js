@@ -4,13 +4,14 @@ const path = require("path");
 
 
 
-function createPDF(text, file) {
-    const outputDir = "output";
+function createPDF(text, file, pdfFolder) {
+    // const outputDir = "output";
     const pdfName = path.basename(file, path.extname(file)) + ".pdf";
-    const pdfPath = `${outputDir}/${pdfName}`;
+    // const pdfPath = `${outputDir}/${pdfName}`;
+    const pdfPath = path.join(pdfFolder, pdfName);
 
-    if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir);
+    if (!fs.existsSync(pdfFolder)) {
+        fs.mkdirSync(pdfFolder);
     }
     const doc = new PDFDocument();
     doc.pipe(fs.createWriteStream(pdfPath));
