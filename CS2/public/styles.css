@@ -1,23 +1,100 @@
 body {
-    font-family: Arial, sans-serif;
+    font-family: 'Arial', sans-serif;
+    background-color: #e9f7ef;
+    color: #333;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
     text-align: center;
-    padding: 20px;
 }
 
-form {
-    margin: 20px auto;
-    max-width: 300px;
+.container {
+    background-color: #fff;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;  /* Đặt các phần tử theo chiều dọc */
+    justify-content: center; /* Căn giữa các phần tử */
+    align-items: center;
+}
+
+h1 {
+    font-size: 24px;
+    margin-bottom: 20px;  /* Khoảng cách giữa tiêu đề và phần dưới */
+    color: #2ecc71;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+input[type="file"] {
+    padding: 12px 15px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    font-size: 16px;
+    width: 100%;
+    margin-bottom: 20px;  /* Khoảng cách giữa ô chọn file và nút upload */
+    cursor: pointer;
+    transition: border-color 0.3s ease;
+}
+
+input[type="file"]:hover {
+    border-color: #2ecc71;
 }
 
 button {
-    background-color: #4CAF50;
+    background-color: #2ecc71;
     color: white;
     border: none;
-    padding: 10px 20px;
+    padding: 14px 0;
     cursor: pointer;
-    margin-top: 10px;
+    border-radius: 8px;
+    width: 100%;
+    font-size: 18px;
+    transition: background-color 0.3s ease;
 }
 
 button:hover {
-    background-color: #45a049;
+    background-color: #27ae60;
+}
+
+#result {
+    margin-top: 20px;
+    display: none;
+    font-size: 18px;
+}
+
+a {
+    color: #2ecc71;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 20px;
+        max-width: 100%;
+    }
+
+    h1 {
+        font-size: 22px;
+    }
+
+    button {
+        font-size: 16px;
+    }
+
+    input[type="file"] {
+        font-size: 14px;
+    }
 }

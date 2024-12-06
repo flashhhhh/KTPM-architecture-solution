@@ -9,13 +9,13 @@
 <body>
     <h1>Upload Image and Download Translated PDF</h1>
     <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
-        <label for="file">Choose a file (Image or Zip):</label>
+        <!-- <label for="file">Choose a file (Image or Zip):</label> -->
         <input type="file" name="file" id="file" accept=".zip, .jpg, .jpeg, .png" required>
         <button type="submit">Upload and Process</button>
     </form>
 
     <div id="result" style="display:none;">
-        <p>Download</p>
+        <!-- <p>Download</p> -->
         <a id="downloadLink" href="#" download>Download Processed File</a>
     </div>
     <script>
