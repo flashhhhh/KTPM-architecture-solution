@@ -1,7 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const crypto = require("crypto");
-
+const { performance } = require('perf_hooks');
 const { unzipFile } = require("./utils/unzip");
 const { createZipFile } = require("./utils/zip");
 const ocr = require("./utils/ocr");
@@ -15,6 +15,8 @@ const PORT = 3000;
 app.use(express.static("public"));
 
 app.post("/upload", upload.single("file"), async (req, res) => {
+    const startTime = performance.now(); // Bắt đầu đo thời gian
+
     try {
         const inputPath = req.file.path;
         const requestId =  crypto.randomUUID();
@@ -63,6 +65,9 @@ app.post("/upload", upload.single("file"), async (req, res) => {
         console.error("Error:", err);
         res.status(500).send("Internal Server Error");
     }
+    const endTime = performance.now(); // Kết thúc đo thời gian
+    const executionTime = endTime - startTime; // Tính thời gian thực thi
+    console.log(`Execution time: ${executionTime.toFixed(2) / 1000} ms`);
 });
 app.get("/downloadFile/:requestId/:filename", (req, res) => {
     const { requestId, filename } = req.params;
