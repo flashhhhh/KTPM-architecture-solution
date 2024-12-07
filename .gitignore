@@ -2,3 +2,6 @@ node_modules
 CS1/db/app.db
 output.pdf
 .DS_Store
+CS2/output/
+CS2/pdf/
+CS2/uploads/
