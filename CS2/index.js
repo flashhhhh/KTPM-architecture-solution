@@ -1,7 +1,6 @@
 const express = require("express");
 const multer = require("multer");
 const crypto = require("crypto");
-const { performance } = require('perf_hooks');
 const path = require("path");
 const fs = require("fs");
 const { Kafka } = require('kafkajs');
@@ -24,7 +23,7 @@ const consumer = kafka.consumer({ groupId: 'app-group' });
 isFinished = new Map();
 
 app.post("/upload", upload.single("file"), async (req, res) => {
-    const startTime = performance.now(); // Bắt đầu đo thời gian
+    const startTime = Date.now();
 
     const inputPath = req.file.path;
     const requestId =  crypto.randomUUID();
@@ -36,7 +35,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     await producer.send({
         topic: "unzip-topic",
         messages: [
-            { value: JSON.stringify({ requestId, inputPath: "../" + inputPath, pdfFolder, fileType }) },
+            { value: JSON.stringify({ requestId, inputPath: "../" + inputPath, pdfFolder, fileType, startTime }) },
         ],
     });
 
@@ -53,21 +52,21 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
     // Delete file and folder
     fs.unlinkSync(inputPath);
-    fs.rmdir(pdfFolder, { recursive: true }, (err) => {
-        if (err) {
-            console.error("Error removing folder:", err);
-        } else {
-            console.log(`Folder ${pdfFolder} removed.`);
-        }
-    });
+    if (fs.existsSync(pdfFolder))
+        fs.rm(pdfFolder, { recursive: true }, (err) => {
+            if (err) {
+                console.error("Error removing folder:", err);
+            }
+        });
+
     const extractFolder = path.join(__dirname, "uploads", `extracted_${requestId}`);
-    fs.rmdir(extractFolder, { recursive: true }, (err) => {
-        if (err) {
-            console.error("Error removing folder:", err);
-        } else {
-            console.log(`Folder ${extractFolder} removed.`);
-        }
-    });
+
+    if (fs.existsSync(extractFolder))
+        fs.rm(extractFolder, { recursive: true }, (err) => {
+            if (err) {
+                console.error("Error removing folder:", err);
+            }
+        });
 
     res.json({ downloadLink: `/download/${requestId}` });
 
@@ -145,18 +144,18 @@ app.get("/downloadFile/:requestId/:filename", (req, res) => {
     const zipPath = path.join(__dirname, "pdf", `pdf_${requestId}`, filename);
     const pdfFolder = path.join(__dirname, "pdf", `pdf_${requestId}`);
     res.download(zipPath, (err) => {
+        if (err) {
+            console.error("Error sending PDF:", err);
+        }
+        fs.unlinkSync(zipPath);
+        fs.rm(pdfFolder, { recursive: true }, (err) => {
             if (err) {
-                console.error("Error sending PDF:", err);
+                console.error("Error removing folder:", err);
+            } else {
+                console.log(`Folder ${pdfFolder} removed.`);
             }
-            fs.unlinkSync(zipPath);
-            fs.rmdir(pdfFolder, { recursive: true }, (err) => {
-                if (err) {
-                    console.error("Error removing folder:", err);
-                } else {
-                    console.log(`Folder ${pdfFolder} removed.`);
-                }
-            });
         });
+    });
 });
 app.get("/download/:requestId", (req, res) => {
     const requestId = req.params.requestId;
@@ -170,7 +169,7 @@ app.get("/download/:requestId", (req, res) => {
         // Delete the zip file
         fs.unlinkSync(zipPath);
 
-        fs.rmdir(outputPath, { recursive: true }, (err) => {
+        fs.rm(outputPath, { recursive: true }, (err) => {
             if (err) {
                 console.error("Error removing folder:", err);
             } else {

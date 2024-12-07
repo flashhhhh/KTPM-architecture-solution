@@ -21,12 +21,13 @@ async function image2text(path){
 // }
 
 async function consumeMessage() {
+  await producer.connect();
   await consumer.connect();
   await consumer.subscribe({ topic: "ocr-topic" });
 
   await consumer.run({
     eachMessage: async ({ topic, partition, message }) => {
-      const { requestId, filePath, file, pdfFolder, numFiles } = JSON.parse(
+      const { requestId, filePath, file, pdfFolder, numFiles, startTime } = JSON.parse(
         message.value.toString()
       );
       
@@ -35,10 +36,9 @@ async function consumeMessage() {
 
       console.log(`Request ID: ${requestId} was received by OCR service on process ${process.pid}`);
 
-      await producer.connect();
       await producer.send({
         topic: "translate-topic",
-        messages: [{ value: JSON.stringify({ requestId, text, file, pdfFolder, numFiles }) }],
+        messages: [{ value: JSON.stringify({ requestId, text, file, pdfFolder, numFiles, startTime }) }],
       });
     },
   });

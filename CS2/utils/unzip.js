@@ -29,12 +29,13 @@ async function unzipFile(zipPath, extractFolder) {
 }
 
 async function consumeMessage() {
+    await producer.connect();
     await consumer.connect();
     await consumer.subscribe({ topic: "unzip-topic" });
 
     await consumer.run({
         eachMessage: async ({ topic, partition, message }) => {
-            const { requestId, inputPath, pdfFolder, fileType } = JSON.parse(
+            const { requestId, inputPath, pdfFolder, fileType, startTime } = JSON.parse(
                 message.value.toString()
             );
 
@@ -48,13 +49,12 @@ async function consumeMessage() {
                 const extractedFiles = fs.readdirSync(extractFolder);
                 const numFiles = extractedFiles.length;
 
-                await producer.connect();
                 for (const file of extractedFiles) {
                     const filePath = path.join(extractFolder, file);
                     if (fs.lstatSync(filePath).isFile()) {
                         await producer.send({
                             topic: "ocr-topic",
-                            messages: [{ value: JSON.stringify({ requestId, filePath, file, pdfFolder, numFiles }) }],
+                            messages: [{ value: JSON.stringify({ requestId, filePath, file, pdfFolder, numFiles, startTime }) }],
                         });
                     }
                 }

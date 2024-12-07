@@ -32,22 +32,22 @@ function translate(text) {
 // }
 
 async function consumeMessage() {
+    await producer.connect();
     await consumer.connect();
     await consumer.subscribe({ topic: "translate-topic" });
 
     await consumer.run({
         eachMessage: async ({ topic, partition, message }) => {
-            const { requestId, text, file, pdfFolder, numFiles } = JSON.parse(
+            const { requestId, text, file, pdfFolder, numFiles, startTime } = JSON.parse(
                 message.value.toString()
             );
             const translatedText = await translate(text);
 
             console.log(`Request ID: ${requestId} was received by Translate service on process ${process.pid}`);
 
-            await producer.connect();
             await producer.send({
                 topic: "pdf-topic",
-                messages: [{ value: JSON.stringify({ requestId, text: translatedText, file, pdfFolder, numFiles }) }],
+                messages: [{ value: JSON.stringify({ requestId, text: translatedText, file, pdfFolder, numFiles, startTime }) }],
             });
         },
     });

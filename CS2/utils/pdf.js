@@ -33,12 +33,13 @@ function createPDF(text, file, pdfFolder) {
 }
 
 async function consumeMessage() {
+    await producer.connect();
     await consumer.connect();
     await consumer.subscribe({ topic: "pdf-topic" });
 
     await consumer.run({
         eachMessage: async ({ topic, partition, message }) => {
-            const { requestId, text, file, pdfFolder, numFiles } = JSON.parse(
+            const { requestId, text, file, pdfFolder, numFiles, startTime } = JSON.parse(
                 message.value.toString()
             );
 
@@ -46,10 +47,9 @@ async function consumeMessage() {
 
             console.log(`Request ID: ${requestId} was received by PDF service on process ${process.pid}`);
 
-            await producer.connect();
             await producer.send({
                 topic: "zip-topic",
-                messages: [{ key: requestId, value: JSON.stringify({ requestId, pdfPath, numFiles }) }],
+                messages: [{ key: requestId, value: JSON.stringify({ requestId, pdfPath, numFiles, startTime }) }],
             });
         },
     });
