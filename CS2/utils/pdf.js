@@ -2,25 +2,31 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require("path");
 const { performance } = require('perf_hooks');
-const { Kafka } = require('kafkajs');
+const kafkaNode = require('kafka-node');
 
-const kafka = new Kafka({
-    clientId: 'my-app',
-    brokers: ['localhost:9092']
-});
+const args = process.argv.slice(2);
+const partitionId = parseInt(args[0]);
 
-const producer = kafka.producer();
-const consumer = kafka.consumer({ groupId: 'pdf-group' });
+// Initialize Kafka client and producer
+const client = new kafkaNode.KafkaClient({ kafkaHost: 'localhost:9092' });
+const producer = new kafkaNode.Producer(client);
 
+// Consumer for the "pdf-topic"
+const consumer = new kafkaNode.Consumer(
+  client,
+  [{ topic: "pdf-topic", partition: partitionId }],
+  { autoCommit: true }
+);
+
+// Function to create a PDF
 function createPDF(text, file, pdfFolder) {
-    // const outputDir = "output";
     const pdfName = path.basename(file, path.extname(file)) + ".pdf";
-    // const pdfPath = `${outputDir}/${pdfName}`;
     const pdfPath = path.join(pdfFolder, pdfName);
 
     if (!fs.existsSync(pdfFolder)) {
         fs.mkdirSync(pdfFolder);
     }
+
     const doc = new PDFDocument();
     doc.pipe(fs.createWriteStream(pdfPath));
     try {
@@ -30,31 +36,51 @@ function createPDF(text, file, pdfFolder) {
     }
     doc.fontSize(14).text(text, 100, 100);
     doc.end();
+
     return pdfPath;
 }
 
-async function consumeMessage() {
-    await producer.connect();
-    await consumer.connect();
-    await consumer.subscribe({ topic: "pdf-topic" });
+producer.on('ready', () => {
+    console.log("Producer is ready");
+});
 
-    await consumer.run({
-        eachMessage: async ({ topic, partition, message }) => {
-            const { requestId, text, file, pdfFolder, numFiles } = JSON.parse(
-                message.value.toString()
-            );
+producer.on('error', (err) => {
+    console.error("Producer error:", err);
+});
 
-            const startTime = performance.now();
-            const pdfPath = createPDF(text, file, pdfFolder);
+consumer.on('message', async (message) => {
+    try {
+        const { requestId, text, file, pdfFolder, numFiles } = JSON.parse(message.value);
 
-            console.log(`Request ID: ${requestId} was received by PDF service on process ${process.pid}. File ${file} was processed in ${performance.now() - startTime} ms.`);
+        const startTime = performance.now();
+        const pdfPath = createPDF(text, file, pdfFolder);
 
-            await producer.send({
+        console.log(
+            `Request ID: ${requestId} was received by PDF service. File ${file} was processed in ${
+                performance.now() - startTime
+            } ms.`
+        );
+
+        const payloads = [
+            {
                 topic: "zip-topic",
-                messages: [{ key: requestId, value: JSON.stringify({ requestId, pdfPath, numFiles }) }],
-            });
-        },
-    });
-}
+                messages: JSON.stringify({ requestId, pdfPath, numFiles }),
+                key: requestId
+            }
+        ];
 
-consumeMessage().catch(console.error);
+        producer.send(payloads, (err, data) => {
+            if (err) {
+                console.error("Error sending message:", err);
+            } else {
+                console.log("Message sent to zip-topic:", data);
+            }
+        });
+    } catch (error) {
+        console.error("Error processing message:", error);
+    }
+});
+
+consumer.on('error', (err) => {
+    console.error("Consumer error:", err);
+});

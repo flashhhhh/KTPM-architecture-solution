@@ -1,20 +1,36 @@
 const fs = require("fs");
 const path = require("path");
 const unzipper = require("unzipper");
-const { Kafka } = require("kafkajs");
+const kafkaNode = require("kafka-node");
 
-const kafka = new Kafka({
-    clientId: "my-app",
-    brokers: ["localhost:9092"],
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+const NUM_OCR = process.env.NUM_OCR || 1;
+
+// Initialize Kafka client and producer
+const client = new kafkaNode.KafkaClient({ kafkaHost: "localhost:9092" });
+const producer = new kafkaNode.Producer(client);
+
+// Consumer for the "unzip-topic"
+const consumer = new kafkaNode.Consumer(
+  client,
+  [{ topic: "unzip-topic", partition: 0 }],
+  { autoCommit: true }
+);
+
+consumer.on("error", (err) => {
+    console.error("Consumer error:", err);
 });
 
-const producer = kafka.producer();
-const consumer = kafka.consumer({ groupId: "unzip-group" });
+producer.on("ready", () => {
+    console.log("Producer is ready");
+});
 
-async function connectProducer() {
-    await producer.connect();
-}
+producer.on("error", (err) => {
+    console.error("Producer error:", err);
+});
 
+
+// Unzip function
 async function unzipFile(zipPath, extractFolder) {
     return new Promise((resolve, reject) => {
         if (!fs.existsSync(zipPath)) {
@@ -28,42 +44,47 @@ async function unzipFile(zipPath, extractFolder) {
     });
 }
 
-async function consumeMessage() {
-    await consumer.connect();
-    await consumer.subscribe({ topic: "unzip-topic" });
+// Handle messages from the consumer
+consumer.on("message", async (message) => {
+    console.log("Message received:", message);
 
-    await consumer.run({
-        eachMessage: async ({ topic, partition, message }) => {
-            const { requestId, inputPath, pdfFolder, fileType } = JSON.parse(
-                message.value.toString()
-            );
+    try {
+        const { requestId, inputPath, pdfFolder, fileType } = JSON.parse(message.value);
 
-            console.log(`Request ID: ${requestId} was received by Unzip service on process ${process.pid}`);
+        console.log(`Request ID: ${requestId} was received by Unzip service.`);
 
-            if (fileType === ".zip") {
-                const extractFolder = path.join(__dirname, "../", "uploads", `extracted_${requestId}`);
-                fs.mkdirSync(extractFolder, { recursive: true });
+        if (fileType === ".zip") {
+            const extractFolder = path.join(__dirname, "../", "uploads", `extracted_${requestId}`);
+            fs.mkdirSync(extractFolder, { recursive: true });
 
-                await unzipFile(inputPath, extractFolder);
-                const extractedFiles = fs.readdirSync(extractFolder);
-                const numFiles = extractedFiles.length;
+            await unzipFile(inputPath, extractFolder);
+            const extractedFiles = fs.readdirSync(extractFolder);
+            const numFiles = extractedFiles.length;
 
-                await producer.connect();
-                for (const file of extractedFiles) {
-                    const filePath = path.join(extractFolder, file);
-                    if (fs.lstatSync(filePath).isFile()) {
-                        await producer.send({
+            console.log("Number of files extracted:", numFiles);
+
+            for (const file of extractedFiles) {
+                const filePath = path.join(extractFolder, file);
+                if (fs.lstatSync(filePath).isFile()) {
+                    const payloads = [
+                        {
                             topic: "ocr-topic",
-                            messages: [{ value: JSON.stringify({ requestId, filePath, file, pdfFolder, numFiles }) }],
-                        });
+                            messages: JSON.stringify({ requestId, filePath, file, pdfFolder, numFiles }),
+                        },
+                    ];
+                    payloads[0].partition = Math.floor(Math.random() * NUM_OCR);
 
-                        console.log(`Request ID: ${requestId} was sent to OCR service on process ${process.pid}. File ${file} was sent.`);
-                    }
+                    producer.send(payloads, (err, data) => {
+                        if (err) {
+                            console.error(`Error sending message for file ${file}:`, err);
+                        } else {
+                            console.log(`Request ID: ${requestId} was sent to OCR service, partition ${payloads[0].partition}. File ${file} was sent.`);
+                        }
+                    });
                 }
             }
-        },
-    });
-}
-
-// Infinitely consume message
-consumeMessage().catch(console.error);
+        }
+    } catch (error) {
+        console.error("Error processing message:", error);
+    }
+});

@@ -1,15 +1,15 @@
 const fs = require("fs");
 const archiver = require("archiver");
 const path = require("path");
-const { Kafka } = require('kafkajs');
+const kafka = require('kafka-node');
 
-const kafka = new Kafka({
-    clientId: 'my-app',
-    brokers: ['localhost:9092']
-});
-
-const producer = kafka.producer();
-const consumer = kafka.consumer({ groupId: 'zip-group' });
+const client = new kafka.KafkaClient({ kafkaHost: 'localhost:9092' });
+const producer = new kafka.Producer(client);
+const consumer = new kafka.Consumer(
+    client,
+    [{ topic: 'zip-topic', partition: 0 }],
+    { autoCommit: true }
+);
 
 async function createZipFile(outputPath, files) {
     return new Promise((resolve, reject) => {
@@ -28,9 +28,6 @@ async function createZipFile(outputPath, files) {
                 archive.file(file, { name: path.basename(file) });
             });
         }
-        // files.forEach((file) => {
-        //     archive.file(file, { name: path.basename(file) });
-        // });
 
         archive.finalize();
     });
@@ -38,41 +35,43 @@ async function createZipFile(outputPath, files) {
 
 const map = new Map();
 
-async function consumeMessage() {
-    await consumer.connect();
-    await consumer.subscribe({ topic: "zip-topic" });
+consumer.on('message', async (message) => {
+    const { requestId, pdfPath, numFiles } = JSON.parse(message.value);
 
-    await consumer.run({
-        eachMessage: async ({ topic, partition, message }) => {
-            const { requestId, pdfPath, numFiles, startTime } = JSON.parse(
-                message.value.toString()
-            );
+    if (!fs.existsSync(path.join(__dirname, "../", "output", `${requestId}`))) {
+        fs.mkdirSync(path.join(__dirname, "../", "output", `${requestId}`), { recursive: true });
+    }
+    const zipPath = path.join(__dirname, "../", "output", `${requestId}`, `processed_file.zip`);
 
-            // console.log(`Request ID: ${requestId} was received by Zip service on process ${process.pid}`);
+    if (map.has(requestId)) {
+        map.get(requestId).push(pdfPath);
+    } else {
+        map.set(requestId, [pdfPath]);
+    }
 
-            if (!fs.existsSync(path.join(__dirname, "../", "output", `${requestId}`))) {
-                fs.mkdirSync(path.join(__dirname, "../", "output", `${requestId}`), { recursive: true });
-            }
-            const zipPath = path.join(__dirname, "../", "output", `${requestId}`, `processed_file.zip`);
+    console.log(`Received PDF path: ${pdfPath}, numFiles: ${numFiles}, current files: ${map.get(requestId).length}`);
 
-            if (map.has(requestId)) {
-                map.get(requestId).push(pdfPath);
-            } else {
-                map.set(requestId, [pdfPath]);
-            }
-            
-            if (map.get(requestId).length === numFiles) {
-                await createZipFile(zipPath, map.get(requestId));
-                map.delete(requestId);
+    if (map.get(requestId).length === numFiles) {
+        await createZipFile(zipPath, map.get(requestId));
+        map.delete(requestId);
 
-                await producer.connect();
-                await producer.send({
-                    topic: "app-topic",
-                    messages: [{ key: requestId, value: JSON.stringify({ requestId, zipPath }) }],
-                });
-            }
-        },
-    });
-}
+        producer.send([{
+            topic: 'app-topic',
+            messages: JSON.stringify({ requestId, zipPath })
+        }], (err, data) => {
+            if (err) console.error(err);
+        });
+    }
+});
 
-consumeMessage().catch(console.error);
+consumer.on('error', (err) => {
+    console.error('Error:', err);
+});
+
+producer.on('ready', () => {
+    console.log('Producer is ready');
+});
+
+producer.on('error', (err) => {
+    console.error('Error:', err);
+});

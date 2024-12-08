@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 const { performance } = require("perf_hooks");
-const { Kafka } = require('kafkajs');
+const kafka = require('kafka-node');
 
 const PORT = 3000;
 
@@ -13,31 +13,52 @@ const upload = multer({ dest: "uploads/" });
 
 app.use(express.static("public"));
 
-const kafka = new Kafka({
-    clientId: 'my-app',
-    brokers: ['localhost:9092']
+const client = new kafka.KafkaClient({ kafkaHost: 'localhost:9092', autoConnect: true });
+const producer = new kafka.Producer(client);
+
+producer.on('ready', () => {
+    console.log("Kafka Producer is ready.");
 });
 
-const producer = kafka.producer();
-const consumer = kafka.consumer({ groupId: 'app-group' });
+producer.on('error', (err) => {
+    console.error("Producer error:", err);
+});
 
-isFinished = new Map();
+const consumer = new kafka.Consumer(
+    client,
+    [{ topic: 'app-topic', partition: 0 }],
+    { autoCommit: true, groupId: 'app-group' }
+);
+
+const isFinished = new Map();
 
 app.post("/upload", upload.single("file"), async (req, res) => {
     const startTime = performance.now();
 
     const inputPath = req.file.path;
-    const requestId =  crypto.randomUUID();
+    const requestId = crypto.randomUUID();
     const pdfFolder = path.join(__dirname, "pdf", `pdf_${requestId}`);
     fs.mkdirSync(pdfFolder, { recursive: true });
     const fileType = path.extname(req.file.originalname).toLowerCase();
 
-    await producer.connect();
-    await producer.send({
-        topic: "unzip-topic",
-        messages: [
-            { value: JSON.stringify({ requestId, inputPath: "../" + inputPath, pdfFolder, fileType }) },
-        ],
+    console.log("Input path: ", inputPath);
+
+    const messagePayload = JSON.stringify({
+        requestId,
+        inputPath: "../" + inputPath,
+        pdfFolder,
+        fileType,
+    });
+
+    producer.send([{
+        topic: 'unzip-topic',
+        messages: messagePayload,
+    }], (err) => {
+        if (err) {
+            console.error("Error sending message:", err);
+            return res.status(500).json({ error: "Failed to send message to Kafka." });
+        }
+        console.log(`Request ID: ${requestId} was sent to Unzip service.`);
     });
 
     /*
@@ -72,76 +93,8 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     console.log("Time taken for request ID: ", requestId, " is ", (performance.now() - startTime) / 1000, " seconds");
 
     res.json({ downloadLink: `/download/${requestId}` });
-
-    // await consumer.connect();
-    // await consumer.subscribe({ topic: "app-topic" });
-
-    // const messageHandler = async ({ message }) => {
-    //     const { requestId, zipPath } = JSON.parse(message.value.toString());
-    //     console.log(zipPath);
-
-    //     if (receivedRequestId === requestId) {
-    //         res.json({ downloadLink: `/download/${requestId}` });
-    //         await consumer.disconnect();
-    //     }
-    // };
-
-    // await consumer.run({
-    //     eachMessage: messageHandler,
-    // });
-
-    // try {
-    //     const inputPath = req.file.path;
-    //     const requestId =  crypto.randomUUID();
-    //     const pdfFolder = path.join(__dirname, "pdf", `pdf_${requestId}`);       
-    //     fs.mkdirSync(pdfFolder, { recursive: true });
-    //     const fileType = path.extname(req.file.originalname).toLowerCase();
-
-    //     if (fileType === ".zip") {
-    //         const extractFolder = path.join(__dirname, "uploads", `extracted_${requestId}`);
-    //         const outputFolder = path.join(__dirname, "output", `output_${requestId}`);
-    //         fs.mkdirSync(extractFolder, { recursive: true });
-    //         fs.mkdirSync(outputFolder, { recursive: true });
-    //         await unzipFile(inputPath, extractFolder);
-    //         const extractedFiles = fs.readdirSync(extractFolder);
-    //         const pdfFiles = [];
-
-    //         for (const file of extractedFiles) {
-    //             const filePath = path.join(extractFolder, file);
-    //             if (fs.lstatSync(filePath).isFile()) {
-    //                 const text = await ocr.image2text(filePath);
-    //                 const translatedText = await translate(text);
-    //                 const pdfPath = createPDF(translatedText, file, pdfFolder);
-    //                 pdfFiles.push(pdfPath);
-    //             }
-    //         }
-    //         console.log(pdfFiles.length);
-    //         const zipOutputPath = path.join(outputFolder, "processed_file.zip");          
-    //         await createZipFile(zipOutputPath, pdfFiles);
-    //         fs.unlinkSync(inputPath);
-    //         fs.rmSync(extractFolder, { recursive: true, force: true });
-    //         fs.rmSync(pdfFolder, { recursive: true, force: true });
-    //         res.json({ downloadLink: `/download/${requestId}` });
-    //     } else if (fileType === ".jpg" || fileType === ".jpeg" || fileType === ".png") {
-            
-    //         const text = await ocr.image2text(inputPath);
-    //         const translatedText = await translate(text);
-    //         const pdfPath = createPDF(translatedText, req.file.originalname, pdfFolder);
-    //         fs.unlinkSync(inputPath);
-    //         res.json({ downloadLink: `/downloadFile/${requestId}/${path.basename(pdfPath)}` });
-
-    //     } else {
-    //         fs.unlinkSync(inputPath);
-    //         res.status(400).send("Chỉ hỗ trợ file ảnh (JPG, PNG) hoặc file ZIP.");
-    //     }
-    // } catch (err) {
-    //     console.error("Error:", err);
-    //     res.status(500).send("Internal Server Error");
-    // }
-    // const endTime = performance.now(); // Kết thúc đo thời gian
-    // const executionTime = endTime - startTime; // Tính thời gian thực thi
-    // console.log(`Execution time: ${executionTime.toFixed(2) / 1000} ms`);
 });
+
 app.get("/downloadFile/:requestId/:filename", (req, res) => {
     const { requestId, filename } = req.params;
     const zipPath = path.join(__dirname, "pdf", `pdf_${requestId}`, filename);
@@ -160,6 +113,7 @@ app.get("/downloadFile/:requestId/:filename", (req, res) => {
         });
     });
 });
+
 app.get("/download/:requestId", (req, res) => {
     const requestId = req.params.requestId;
     const zipPath = path.join(__dirname, "output", `${requestId}`, `processed_file.zip`);
@@ -184,23 +138,14 @@ app.get("/download/:requestId", (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
-});     
+});
 
-async function consumeMessage() {
-    await consumer.connect();
-    await consumer.subscribe({ topic: "app-topic" });
+consumer.on('message', (message) => {
+    const { requestId, zipPath } = JSON.parse(message.value);
+    console.log(`Request ID: ${requestId} was completed by App service on process ${process.pid}`);
+    isFinished.set(requestId, true);
+});
 
-    await consumer.run({
-        eachMessage: async ({ topic, partition, message }) => {
-            const { requestId, zipPath } = JSON.parse(
-                message.value.toString()
-            );
-
-            console.log(`Request ID: ${requestId} was completed by App service on process ${process.pid}`);
-
-            isFinished.set(requestId, true);
-        },
-    });
-}
-
-consumeMessage().catch(console.error);
+consumer.on('error', (err) => {
+    console.error("Error in consumer:", err);
+});

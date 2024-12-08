@@ -5,3 +5,5 @@ output.pdf
 CS2/output/
 CS2/pdf/
 CS2/uploads/
+CS2/utils/*.log
+CS2/.env
