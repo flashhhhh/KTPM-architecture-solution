@@ -1,6 +1,7 @@
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require("path");
+const { performance } = require('perf_hooks');
 const { Kafka } = require('kafkajs');
 
 const kafka = new Kafka({
@@ -39,17 +40,18 @@ async function consumeMessage() {
 
     await consumer.run({
         eachMessage: async ({ topic, partition, message }) => {
-            const { requestId, text, file, pdfFolder, numFiles, startTime } = JSON.parse(
+            const { requestId, text, file, pdfFolder, numFiles } = JSON.parse(
                 message.value.toString()
             );
 
+            const startTime = performance.now();
             const pdfPath = createPDF(text, file, pdfFolder);
 
-            console.log(`Request ID: ${requestId} was received by PDF service on process ${process.pid}`);
+            console.log(`Request ID: ${requestId} was received by PDF service on process ${process.pid}. File ${file} was processed in ${performance.now() - startTime} ms.`);
 
             await producer.send({
                 topic: "zip-topic",
-                messages: [{ key: requestId, value: JSON.stringify({ requestId, pdfPath, numFiles, startTime }) }],
+                messages: [{ key: requestId, value: JSON.stringify({ requestId, pdfPath, numFiles }) }],
             });
         },
     });

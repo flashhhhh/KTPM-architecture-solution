@@ -1,4 +1,5 @@
 const translator = require("open-google-translator");
+const { performance } = require("perf_hooks");
 const { Kafka } = require("kafkajs");
 
 translator.supportedLanguages();
@@ -38,16 +39,18 @@ async function consumeMessage() {
 
     await consumer.run({
         eachMessage: async ({ topic, partition, message }) => {
-            const { requestId, text, file, pdfFolder, numFiles, startTime } = JSON.parse(
+            const { requestId, text, file, pdfFolder, numFiles } = JSON.parse(
                 message.value.toString()
             );
+
+            startTime = performance.now();
             const translatedText = await translate(text);
 
-            console.log(`Request ID: ${requestId} was received by Translate service on process ${process.pid}`);
+            console.log(`Request ID: ${requestId} was received by Translate service on process ${process.pid}. File ${file} was processed in ${performance.now() - startTime} ms.`);
 
             await producer.send({
                 topic: "pdf-topic",
-                messages: [{ value: JSON.stringify({ requestId, text: translatedText, file, pdfFolder, numFiles, startTime }) }],
+                messages: [{ value: JSON.stringify({ requestId, text: translatedText, file, pdfFolder, numFiles }) }],
             });
         },
     });

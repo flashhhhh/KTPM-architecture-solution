@@ -3,6 +3,7 @@ const multer = require("multer");
 const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
+const { performance } = require("perf_hooks");
 const { Kafka } = require('kafkajs');
 
 const PORT = 3000;
@@ -23,7 +24,7 @@ const consumer = kafka.consumer({ groupId: 'app-group' });
 isFinished = new Map();
 
 app.post("/upload", upload.single("file"), async (req, res) => {
-    const startTime = Date.now();
+    const startTime = performance.now();
 
     const inputPath = req.file.path;
     const requestId =  crypto.randomUUID();
@@ -35,7 +36,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     await producer.send({
         topic: "unzip-topic",
         messages: [
-            { value: JSON.stringify({ requestId, inputPath: "../" + inputPath, pdfFolder, fileType, startTime }) },
+            { value: JSON.stringify({ requestId, inputPath: "../" + inputPath, pdfFolder, fileType }) },
         ],
     });
 
@@ -45,7 +46,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
     isFinished.set(requestId, false);
     while (!isFinished.get(requestId)) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     isFinished.delete(requestId);
@@ -67,6 +68,8 @@ app.post("/upload", upload.single("file"), async (req, res) => {
                 console.error("Error removing folder:", err);
             }
         });
+
+    console.log("Time taken for request ID: ", requestId, " is ", (performance.now() - startTime) / 1000, " seconds");
 
     res.json({ downloadLink: `/download/${requestId}` });
 

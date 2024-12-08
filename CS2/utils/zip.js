@@ -37,7 +37,6 @@ async function createZipFile(outputPath, files) {
 }
 
 const map = new Map();
-const timing = new Map();
 
 async function consumeMessage() {
     await consumer.connect();
@@ -58,23 +57,13 @@ async function consumeMessage() {
 
             if (map.has(requestId)) {
                 map.get(requestId).push(pdfPath);
-                timing.set(requestId, timing.get(requestId) + Date.now() - startTime);
-
-                console.log(`Start time: ${startTime}, Current time: ${Date.now()}, Elapsed time: ${Date.now() - startTime}`);
             } else {
                 map.set(requestId, [pdfPath]);
-                timing.set(requestId, Date.now() - startTime);
             }
             
             if (map.get(requestId).length === numFiles) {
                 await createZipFile(zipPath, map.get(requestId));
                 map.delete(requestId);
-
-                const totalTime = timing.get(requestId);
-                timing.delete(requestId);
-                
-                console.log(`Request ID: ${requestId} was completed by Zip service on process ${process.pid}`);
-                console.log(`Average time: ${totalTime / numFiles} ms`);
 
                 await producer.connect();
                 await producer.send({
