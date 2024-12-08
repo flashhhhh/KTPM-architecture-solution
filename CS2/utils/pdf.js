@@ -50,7 +50,7 @@ producer.on('error', (err) => {
 
 consumer.on('message', async (message) => {
     try {
-        const { requestId, text, file, pdfFolder, numFiles } = JSON.parse(message.value);
+        const { requestId, text, file, pdfFolder, numFiles, isFailed } = JSON.parse(message.value);
 
         const startTime = performance.now();
         const pdfPath = createPDF(text, file, pdfFolder);
@@ -64,7 +64,7 @@ consumer.on('message', async (message) => {
         const payloads = [
             {
                 topic: "zip-topic",
-                messages: JSON.stringify({ requestId, pdfPath, numFiles }),
+                messages: JSON.stringify({ requestId, pdfPath, numFiles, file, isFailed }),
                 key: requestId
             }
         ];

@@ -22,7 +22,7 @@ const consumer = new kafkaNode.Consumer(
 
 // Translation function
 function translate(text) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     translator
       .TranslateLanguageData({
         listOfWordsToTranslate: [text],
@@ -30,10 +30,15 @@ function translate(text) {
         toLanguage: "vi",
       })
       .then((data) => {
-        resolve(data[0].translation);
+        // console.log("Translation data attributes:", Object.keys(data));
+        if (data[0].translation == data[0].original) {
+          resolve(false); 
+        } else {
+          resolve(data[0].translation);
+        }
       })
       .catch((err) => {
-        reject(err);
+        resolve(false); // Return false in case of an error
       });
   });
 }
@@ -53,7 +58,19 @@ consumer.on("message", async (message) => {
     );
 
     const startTime = performance.now();
-    const translatedText = await translate(text);
+    let translatedText = false;
+    let attempts = 0;
+    while (!translatedText && attempts < 3) {
+      translatedText = await translate(text);
+      attempts++;
+    }
+
+    isFailed = false;
+    if (!translatedText) {
+      console.error("Failed to translate file:", file);
+      translatedText = text;``
+      isFailed = true;
+    }
 
     console.log(
       `Request ID: ${requestId} was received by Translate service. File ${file} was processed in ${
@@ -70,6 +87,7 @@ consumer.on("message", async (message) => {
           file,
           pdfFolder,
           numFiles,
+          isFailed,
         }),
       },
     ];

@@ -11,7 +11,7 @@ const consumer = new kafka.Consumer(
     { autoCommit: true }
 );
 
-async function createZipFile(outputPath, files) {
+async function createZipFile(outputPath, files, failList) {
     return new Promise((resolve, reject) => {
         const output = fs.createWriteStream(outputPath);
         const archive = archiver("zip", { zlib: { level: 9 } });
@@ -27,6 +27,14 @@ async function createZipFile(outputPath, files) {
             files.forEach((file) => {
                 archive.file(file, { name: path.basename(file) });
             });
+
+            if (failList.length > 0) {
+                // Create a file with the list of failed files
+                const failFile = path.join(path.dirname(files[0]), "failed_files.txt");
+                console.log(failFile)
+                fs.writeFileSync(failFile, failList.join("\n"));
+                archive.file(failFile, { name: "failed_files.txt" });
+            }
         }
 
         archive.finalize();
@@ -34,9 +42,10 @@ async function createZipFile(outputPath, files) {
 }
 
 const map = new Map();
+const failFiles = new Map();
 
 consumer.on('message', async (message) => {
-    const { requestId, pdfPath, numFiles } = JSON.parse(message.value);
+    const { requestId, pdfPath, numFiles, file, isFailed } = JSON.parse(message.value);
 
     if (!fs.existsSync(path.join(__dirname, "../", "output", `${requestId}`))) {
         fs.mkdirSync(path.join(__dirname, "../", "output", `${requestId}`), { recursive: true });
@@ -49,10 +58,24 @@ consumer.on('message', async (message) => {
         map.set(requestId, [pdfPath]);
     }
 
+    if (isFailed) {
+        if (failFiles.has(requestId)) {
+            failFiles.get(requestId).push(file);
+        } else {
+            failFiles.set(requestId, [file]);
+        }
+    }
+
     console.log(`Received PDF path: ${pdfPath}, numFiles: ${numFiles}, current files: ${map.get(requestId).length}`);
 
     if (map.get(requestId).length === numFiles) {
-        await createZipFile(zipPath, map.get(requestId));
+        failList = []
+        if (failFiles.has(requestId)) {
+            failList = failFiles.get(requestId);
+            failFiles.delete(requestId);
+        }
+
+        await createZipFile(zipPath, map.get(requestId), failList);
         map.delete(requestId);
 
         producer.send([{
