@@ -9,11 +9,11 @@ bin/kafka-topics.sh --describe --topic pdf-topic --bootstrap-server localhost:90
 bin/kafka-topics.sh --describe --topic zip-topic --bootstrap-server localhost:9092
 
 # Change a topic's partition number
-bin/kafka-topics.sh --alter --topic unzip-topic --partitions 4 --bootstrap-server localhost:9092
-bin/kafka-topics.sh --alter --topic ocr-topic --partitions 4 --bootstrap-server localhost:9092
+bin/kafka-topics.sh --alter --topic unzip-topic --partitions 2 --bootstrap-server localhost:9092
+bin/kafka-topics.sh --alter --topic ocr-topic --partitions 3 --bootstrap-server localhost:9092
 bin/kafka-topics.sh --alter --topic translate-topic --partitions 2 --bootstrap-server localhost:9092
 bin/kafka-topics.sh --alter --topic pdf-topic --partitions 2 --bootstrap-server localhost:9092
-bin/kafka-topics.sh --alter --topic zip-topic --partitions 4 --bootstrap-server localhost:9092
+bin/kafka-topics.sh --alter --topic zip-topic --partitions 2 --bootstrap-server localhost:9092
 
 # List all topics
 bin/kafka-topics.sh --list --bootstrap-server localhost:9092

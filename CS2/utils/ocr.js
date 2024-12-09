@@ -32,6 +32,9 @@ producer.on("error", (err) => {
   console.error("Producer error:", err);
 });
 
+const map = new Map();
+const timing = new Map();
+
 const messageQueue = [];
 let isProcessing = false;
 
@@ -56,6 +59,14 @@ async function processQueue() {
     console.log(`Request ID: ${requestId} is being processed...`);
 
     const text = await image2text(filePath);
+
+    if (map.has(requestId)) {
+      map.set(requestId, map.get(requestId) + 1);
+      timing.set(requestId, timing.get(requestId) + performance.now() - startTime);
+    } else {
+      map.set(requestId, 1);
+      timing.set(requestId, performance.now() - startTime);
+    }
 
     const payloads = [
       {
@@ -84,6 +95,8 @@ async function processQueue() {
         performance.now() - startTime
       } ms.`
     );
+
+    console.log("Total time taken:", timing.get(requestId));
   } catch (error) {
     console.error("Error processing message:", error);
   } finally {

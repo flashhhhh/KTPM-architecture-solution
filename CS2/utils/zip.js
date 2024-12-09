@@ -3,11 +3,14 @@ const archiver = require("archiver");
 const path = require("path");
 const kafka = require('kafka-node');
 
+const args = process.argv.slice(2);
+const partitionId = parseInt(args[0]);
+
 const client = new kafka.KafkaClient({ kafkaHost: 'localhost:9092' });
 const producer = new kafka.Producer(client);
 const consumer = new kafka.Consumer(
     client,
-    [{ topic: 'zip-topic', partition: 0 }],
+    [{ topic: 'zip-topic', partition: partitionId }],
     { autoCommit: true }
 );
 

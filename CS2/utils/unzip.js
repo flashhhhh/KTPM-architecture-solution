@@ -6,6 +6,9 @@ const kafkaNode = require("kafka-node");
 require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 const NUM_OCR = process.env.NUM_OCR || 1;
 
+const args = process.argv.slice(2);
+const partitionId = parseInt(args[0]);
+
 // Initialize Kafka client and producer
 const client = new kafkaNode.KafkaClient({ kafkaHost: "localhost:9092" });
 const producer = new kafkaNode.Producer(client);
@@ -13,7 +16,7 @@ const producer = new kafkaNode.Producer(client);
 // Consumer for the "unzip-topic"
 const consumer = new kafkaNode.Consumer(
   client,
-  [{ topic: "unzip-topic", partition: 0 }],
+  [{ topic: "unzip-topic", partition: partitionId }],
   { autoCommit: true }
 );
 

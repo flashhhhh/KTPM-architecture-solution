@@ -6,6 +6,9 @@ const fs = require("fs");
 const { performance } = require("perf_hooks");
 const kafka = require('kafka-node');
 
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+const NUM_UNZIP = process.env.NUM_UNZIP || 1;
+
 const PORT = 3000;
 
 const app = express();
@@ -49,6 +52,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
         pdfFolder,
         fileType,
     });
+    messagePayload.partition = Math.floor(Math.random() * NUM_UNZIP);
 
     producer.send([{
         topic: 'unzip-topic',

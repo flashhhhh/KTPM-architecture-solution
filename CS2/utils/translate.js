@@ -51,13 +51,16 @@ producer.on("error", (err) => {
   console.error("Producer error:", err);
 });
 
+const map = new Map();
+const timing = new Map();
+
 consumer.on("message", async (message) => {
   try {
     const { requestId, text, file, pdfFolder, numFiles } = JSON.parse(
       message.value
     );
-
     const startTime = performance.now();
+
     let translatedText = false;
     let attempts = 0;
     while (!translatedText && attempts < 3) {
@@ -65,11 +68,21 @@ consumer.on("message", async (message) => {
       attempts++;
     }
 
+    console.log("Attempts:", attempts);
+
     isFailed = false;
     if (!translatedText) {
       console.error("Failed to translate file:", file);
       translatedText = text;``
       isFailed = true;
+    }
+
+    if (map.has(requestId)) {
+      map.set(requestId, map.get(requestId) + 1);
+      timing.get(requestId).push(performance.now() - startTime);
+    } else {
+      map.set(requestId, 1);
+      timing.set(requestId, [performance.now() - startTime]);
     }
 
     console.log(
@@ -100,6 +113,11 @@ consumer.on("message", async (message) => {
         console.log("Message sent to pdf-topic:", data);
       }
     });
+
+    if (map.get(requestId) === numFiles) {
+      const avgTime = timing.get(requestId).reduce((a, b) => a + b, 0) / numFiles;
+      console.log(`Average translate processing time for request ID ${requestId}: ${avgTime} ms`);
+    }
   } catch (error) {
     console.error("Error processing message:", error);
   }
